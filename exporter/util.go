@@ -132,6 +132,31 @@ func CreateMetricsList(c config.Module) ([]JSONMetric, error) {
 				}
 				metrics = append(metrics, jsonMetric)
 			}
+		case config.LokiScrape:
+			for subName, valuePath := range metric.Values {
+				name := MakeMetricName(metric.Name, subName)
+				var variableLabels, variableLabelsValues []string
+				for k, v := range metric.Labels {
+					variableLabels = append(variableLabels, k)
+					variableLabelsValues = append(variableLabelsValues, v)
+				}
+				jsonMetric := JSONMetric{
+					Type: config.ObjectScrape,
+					Desc: prometheus.NewDesc(
+						name,
+						metric.Help,
+						variableLabels,
+						nil,
+					),
+					KeyJSONPath:            metric.Path,
+					ValueJSONPath:          valuePath,
+					LabelsJSONPaths:        variableLabelsValues,
+					LabelsNames:            variableLabels,
+					ValueType:              valueType,
+					EpochTimestampJSONPath: metric.EpochTimestamp,
+				}
+				metrics = append(metrics, jsonMetric)
+			}
 		default:
 			return nil, fmt.Errorf("unknown metric type: '%s', for metric: '%s'", metric.Type, metric.Name)
 		}

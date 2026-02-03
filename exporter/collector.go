@@ -16,33 +16,42 @@ package exporter
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/vgrusdev/json_loki_exporter/config"
+	"github.com/vgrusdev/promtail-client/promtail"
 	"k8s.io/client-go/util/jsonpath"
 )
 
 type JSONMetricCollector struct {
 	JSONMetrics []JSONMetric
-	Data        []byte
+	Data        []byte // result of request to target by FetchJSON(endpoint string)
 	Logger      *slog.Logger
+	LokiClient  promtail.Client
 }
 
 type JSONMetric struct {
 	Desc                   *prometheus.Desc
-	Type                   config.ScrapeType
-	KeyJSONPath            string
-	ValueJSONPath          string
-	LabelsJSONPaths        []string
-	ValueType              prometheus.ValueType
-	EpochTimestampJSONPath string
+	Type                   config.ScrapeType    // string: "value", "object", "loki"
+	KeyJSONPath            string               // root path for patterm
+	ValueJSONPath          string               // path for Value
+	LabelsJSONPaths        []string             // path for labels (labael names are in Desc.variableLabels)
+	LabelsNames            []string             // Names of Labels, assigned in util.CreateMetricsList()
+	ValueType              prometheus.ValueType // "gauge", "counter" etc.
+	EpochTimestampJSONPath string               // path for timestamp
 }
 
 func (mc JSONMetricCollector) Describe(ch chan<- *prometheus.Desc) {
 	for _, m := range mc.JSONMetrics {
-		ch <- m.Desc
+		switch m.Type {
+		case config.ValueScrape:
+			fallthrough
+		case config.ObjectScrape:
+			ch <- m.Desc
+		}
 	}
 }
 
@@ -114,6 +123,59 @@ func (mc JSONMetricCollector) Collect(ch chan<- prometheus.Metric) {
 				mc.Logger.Error("Failed to convert extracted objects to json", "err", err, "metric", m.Desc)
 				continue
 			}
+
+			// ======================= vg ======================================
+
+		case config.LokiScrape:
+			if mc.LokiClient == nil {
+				continue
+			}
+			values, err := extractValue(mc.Logger, mc.Data, m.KeyJSONPath, true)
+			mc.Logger.Debug("mc.JSONMetrics loop, LokiScrape", "values", values)
+			if err != nil {
+				mc.Logger.Error("Failed to extract json objects for metric", "err", err, "metric", m.Desc)
+				continue
+			}
+
+			var jsonData []interface{}
+			if err := json.Unmarshal([]byte(values), &jsonData); err != nil {
+				mc.Logger.Error("Failed to convert extracted objects to json", "err", err, "metric", m.Desc)
+				continue
+			}
+			mc.Logger.Debug("mc.JSONMetrics loop, LokiScrape", "jsonData", jsonData)
+
+			for _, data := range jsonData {
+				mc.Logger.Debug("mc.JSONMetrics loop, LokiScrape, jsonData", "data", data)
+				jdata, err := json.Marshal(data)
+				if err != nil {
+					mc.Logger.Error("Failed to marshal data to json", "path", m.ValueJSONPath, "err", err, "metric", m.Desc, "data", data)
+					continue
+				}
+				value, err := extractValue(mc.Logger, jdata, m.ValueJSONPath, false) // value is an alert message here
+				mc.Logger.Debug("mc.JSONMetrics loop, ObjectScrape, jsonData", "value", value)
+				if err != nil {
+					mc.Logger.Error("Failed to extract value for metric", "path", m.ValueJSONPath, "err", err, "metric", m.Desc)
+					continue
+				}
+
+				labelSet, err := labelSetFromArrays(m.LabelsNames, extractLabels(mc.Logger, jdata, m.LabelsJSONPaths))
+				if err != nil {
+					mc.Logger.Warn("Alert metrics LabelSet mismatch", "err", err)
+					continue
+				}
+				message := value
+				timestamp := getTimestamp(mc.Logger, m, jdata)
+				if rating, ok := labelSet["alert_rating"]; ok {
+					labelSet["level"] = ratingToSeverity(rating)
+				}
+
+				sInputEntry := promtail.SingleEntry{
+					Labels: labelSet,
+					Ts:     timestamp,
+					Line:   message,
+				}
+				mc.LokiClient.Single() <- &sInputEntry
+			}
 		default:
 			mc.Logger.Error("Unknown scrape config type", "type", m.Type, "metric", m.Desc)
 			continue
@@ -183,4 +245,53 @@ func timestampMetric(logger *slog.Logger, m JSONMetric, data []byte, pm promethe
 	}
 	timestamp := time.UnixMilli(epochTime)
 	return prometheus.NewMetricWithTimestamp(timestamp, pm)
+}
+
+func getTimestamp(logger *slog.Logger, m JSONMetric, data []byte) time.Time {
+	if m.EpochTimestampJSONPath == "" {
+		return time.Now()
+	}
+	ts, err := extractValue(logger, data, m.EpochTimestampJSONPath, false)
+	if err != nil {
+		logger.Error("Failed to extract timestamp for metric", "path", m.KeyJSONPath, "err", err, "metric", m.Desc)
+		return time.Now()
+	}
+	epochTime, err := SanitizeIntValue(ts)
+	if err != nil {
+		logger.Error("Failed to parse timestamp for metric", "path", m.KeyJSONPath, "err", err, "metric", m.Desc)
+		return time.Now()
+	}
+	timestamp := time.UnixMilli(epochTime)
+	return timestamp
+}
+
+func labelSetFromArrays(keys []string, values []string) (map[string]string, error) {
+	m := make(map[string]string)
+	if len(keys) != len(values) {
+		return m, errors.New("labelSetFromArrays: Arrays should be the same length")
+	}
+	for i, key := range keys {
+		m[key] = values[i]
+	}
+	return m, nil
+}
+
+func ratingToSeverity(r string) string {
+	switch r {
+	case "0":
+		return "trace"
+	case "1":
+		return "info"
+	case "2":
+		return "warning"
+	case "3":
+		return "error"
+	case "4":
+		return "fatal"
+	case "5":
+		return "panic"
+	default:
+		return "unknown"
+	}
+
 }

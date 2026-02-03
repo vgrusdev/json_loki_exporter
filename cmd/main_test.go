@@ -144,7 +144,7 @@ func TestCorrectResponse(t *testing.T) {
 	defer target.Close()
 
 	for i, test := range tests {
-		c, err := config.LoadConfig(test.ConfigFile)
+		c, err := config.LoadConfig(promslog.NewNopLogger(), test.ConfigFile)
 		if err != nil {
 			t.Fatalf("Failed to load config file %s", test.ConfigFile)
 		}

@@ -34,12 +34,10 @@ import (
 )
 
 var (
-	configFile  = kingpin.Flag("config.file", "JSON exporter configuration file.").Default("config.yml").ExistingFile()
+	configFile  = kingpin.Flag("config.file", "JSON-LOKI exporter configuration file.").Default("config.yml").ExistingFile()
 	configCheck = kingpin.Flag("config.check", "If true validate the config file and then exit.").Default("false").Bool()
-	metricsPath = kingpin.Flag(
-		"web.telemetry-path",
-		"Path under which to expose metrics.",
-	).Default("/metrics").String()
+	metricsPath = kingpin.Flag("web.telemetry-path", "Path under which to expose metrics.").Default("/metrics").String()
+	// lokiConfigFile = kingpin.Flag("loki.config.file", "LOKI client configuration file.").Default("loki_config.yml").ExistingFile()
 	toolkitFlags = kingpinflag.AddFlags(kingpin.CommandLine, ":7979")
 )
 
@@ -48,16 +46,16 @@ func Run() {
 	promslogConfig := &promslog.Config{}
 
 	flag.AddFlags(kingpin.CommandLine, promslogConfig)
-	kingpin.Version(version.Print("json_exporter"))
+	kingpin.Version(version.Print("json_loki_exporter"))
 	kingpin.HelpFlag.Short('h')
 	kingpin.Parse()
 	logger := promslog.New(promslogConfig)
 
-	logger.Info("Starting json_exporter", "version", version.Info())
+	logger.Info("Starting json_loki_exporter", "version", version.Info())
 	logger.Info("Build context", "build", version.BuildContext())
 
 	logger.Info("Loading config file", "file", *configFile)
-	config, err := config.LoadConfig(*configFile)
+	config, err := config.LoadConfig(logger, *configFile)
 	if err != nil {
 		logger.Error("Error loading config", "err", err)
 		os.Exit(1)
@@ -78,8 +76,8 @@ func Run() {
 	})
 	if *metricsPath != "/" && *metricsPath != "" {
 		landingConfig := web.LandingConfig{
-			Name:        "JSON Exporter",
-			Description: "Prometheus Exporter for converting json to metrics",
+			Name:        "JSON and Loki Exporter",
+			Description: "Prometheus Exporter for converting json to metrics, plus submit them to Loki",
 			Version:     version.Info(),
 			Links: []web.LandingLinks{
 				{
@@ -119,7 +117,7 @@ func probeHandler(w http.ResponseWriter, r *http.Request, logger *slog.Logger, c
 		return
 	}
 
-	registry := prometheus.NewPedanticRegistry()
+	//registry := prometheus.NewPedanticRegistry()
 
 	metrics, err := exporter.CreateMetricsList(config.Modules[module])
 	if err != nil {
@@ -144,6 +142,15 @@ func probeHandler(w http.ResponseWriter, r *http.Request, logger *slog.Logger, c
 
 	jsonMetricCollector.Data = data
 
+	jsonMetricCollector.LokiClient, err = exporter.NewLokiClient(config.Modules[module])
+	if err != nil {
+		logger.Error("Failed to create Loki client", "err", err)
+	}
+	if jsonMetricCollector.LokiClient != nil {
+		defer jsonMetricCollector.LokiClient.Shutdown()
+	}
+
+	registry := prometheus.NewPedanticRegistry()
 	registry.MustRegister(jsonMetricCollector)
 	h := promhttp.HandlerFor(registry, promhttp.HandlerOpts{})
 	h.ServeHTTP(w, r)
