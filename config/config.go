@@ -29,7 +29,7 @@ type Metric struct {
 	Labels         map[string]string
 	Type           ScrapeType
 	ValueType      ValueType
-	EpochTimestamp string
+	EpochTimestamp string `yaml:"epochTimestamp"`
 	Help           string
 	Values         map[string]string
 	Messages       map[string]string
