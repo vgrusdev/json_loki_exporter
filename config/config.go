@@ -79,7 +79,7 @@ type LokiConfig struct {
 	Name string `yaml:"loki_name"`
 
 	// TenantId is used to separate different loki streams. if not set "fake" TenantID will be set.
-	TenantId string `yaml:"loki_tenant_id, omitempty"`
+	TenantId string `yaml:"loki_tenant_id,omitempty"`
 
 	// valid duration time units are: ms, s, m, h
 	AlertSamplesMaxAge time.Duration `yaml:"alert_samples_max_age,omitempty"`
