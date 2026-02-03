@@ -24,15 +24,15 @@ import (
 
 // Metric contains values that define a metric
 type Metric struct {
-	Name           string
-	Path           string
-	Labels         map[string]string
-	Type           ScrapeType
-	ValueType      ValueType
-	EpochTimestamp string `yaml:"epochTimestamp"`
-	Help           string
-	Values         map[string]string
-	Messages       map[string]string
+	Name           string            `yaml:"name"`
+	Path           string            `yaml:"path"`
+	Labels         map[string]string `yaml:"labels"`
+	Type           ScrapeType        `yaml:"type"`
+	ValueType      ValueType         `yaml:"valuetype"`
+	EpochTimestamp string            `yaml:"epochTimestamp"`
+	Help           string            `yaml:"help"`
+	Values         map[string]string `yaml:"values"`
+	//Messages       map[string]string
 }
 
 type ScrapeType string
