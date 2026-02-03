@@ -141,7 +141,7 @@ func CreateMetricsList(c config.Module) ([]JSONMetric, error) {
 					variableLabelsValues = append(variableLabelsValues, v)
 				}
 				jsonMetric := JSONMetric{
-					Type: config.ObjectScrape,
+					Type: config.LokiScrape,
 					Desc: prometheus.NewDesc(
 						name,
 						metric.Help,
