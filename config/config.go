@@ -140,9 +140,13 @@ func LoadConfig(logger *slog.Logger, configPath string) (Config, error) {
 		return config, err
 	}
 
+	logger.Debug("Loaded config file data", "config", string(data))
+
 	if err := yaml.Unmarshal(data, &config); err != nil {
 		return config, err
 	}
+
+	logger.Debug("Loaded config file struct", "config", config)
 
 	// Complete Defaults
 	for name, module := range config.Modules {
