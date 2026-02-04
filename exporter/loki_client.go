@@ -78,7 +78,7 @@ func getTimestamp(logger *slog.Logger, m JSONMetric, data []byte) time.Time {
 	if m.EpochTimestampJSONPath == "" {
 		return time.Now()
 	}
-	ts, err := extractValue(logger, data, m.EpochTimestampJSONPath, false)
+	ts, err := extractValue(logger, data, m.EpochTimestampJSONPath, false, true)
 	if err != nil {
 		logger.Error("Failed to extract timestamp for metric", "path", m.EpochTimestampJSONPath, "err", err, "metric", m.Desc)
 		return time.Now()

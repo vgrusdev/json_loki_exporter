@@ -62,7 +62,7 @@ func (mc JSONMetricCollector) Collect(ch chan<- prometheus.Metric) {
 		mc.Logger.Debug("mc.JSONMetrics loop", "m", m)
 		switch m.Type {
 		case config.ValueScrape:
-			value, err := extractValue(mc.Logger, mc.Data, m.KeyJSONPath, false)
+			value, err := extractValue(mc.Logger, mc.Data, m.KeyJSONPath, false, false)
 			mc.Logger.Debug("mc.JSONMetrics loop, ValueScrape", "value", value)
 			if err != nil {
 				mc.Logger.Error("Failed to extract value for metric", "path", m.KeyJSONPath, "err", err, "metric", m.Desc)
@@ -83,7 +83,7 @@ func (mc JSONMetricCollector) Collect(ch chan<- prometheus.Metric) {
 			}
 
 		case config.ObjectScrape:
-			values, err := extractValue(mc.Logger, mc.Data, m.KeyJSONPath, true)
+			values, err := extractValue(mc.Logger, mc.Data, m.KeyJSONPath, true, false)
 			mc.Logger.Debug("mc.JSONMetrics loop, ObjectScrape", "values", values)
 			if err != nil {
 				mc.Logger.Error("Failed to extract json objects for metric", "err", err, "metric", m.Desc)
@@ -100,7 +100,7 @@ func (mc JSONMetricCollector) Collect(ch chan<- prometheus.Metric) {
 						mc.Logger.Error("Failed to marshal data to json", "path", m.ValueJSONPath, "err", err, "metric", m.Desc, "data", data)
 						continue
 					}
-					value, err := extractValue(mc.Logger, jdata, m.ValueJSONPath, false)
+					value, err := extractValue(mc.Logger, jdata, m.ValueJSONPath, false, false)
 					mc.Logger.Debug("mc.JSONMetrics loop, ObjectScrape, jsonData", "value", value)
 					if err != nil {
 						mc.Logger.Error("Failed to extract value for metric", "path", m.ValueJSONPath, "err", err, "metric", m.Desc)
@@ -132,7 +132,7 @@ func (mc JSONMetricCollector) Collect(ch chan<- prometheus.Metric) {
 			if mc.LokiClient == nil {
 				continue
 			}
-			values, err := extractValue(mc.Logger, mc.Data, m.KeyJSONPath, true)
+			values, err := extractValue(mc.Logger, mc.Data, m.KeyJSONPath, true, false)
 			mc.Logger.Debug("mc.JSONMetrics loop, LokiScrape", "values", values)
 			if err != nil {
 				mc.Logger.Error("Failed to extract json objects for metric", "err", err, "metric", m.Desc)
@@ -159,7 +159,7 @@ func (mc JSONMetricCollector) Collect(ch chan<- prometheus.Metric) {
 					mc.Logger.Error("Failed to marshal data to json", "path", m.ValueJSONPath, "err", err, "metric", m.Desc, "data", data)
 					continue
 				}
-				value, err := extractValue(mc.Logger, jdata, m.ValueJSONPath, false) // value is an alert message here
+				value, err := extractValue(mc.Logger, jdata, m.ValueJSONPath, false, true) // value is an alert message here
 				mc.Logger.Debug("mc.JSONMetrics loop, ObjectScrape, jsonData", "value", value)
 				if err != nil {
 					mc.Logger.Error("Failed to extract value for metric", "path", m.ValueJSONPath, "err", err, "metric", m.Desc)
@@ -192,7 +192,7 @@ func (mc JSONMetricCollector) Collect(ch chan<- prometheus.Metric) {
 }
 
 // Returns the last matching value at the given json path
-func extractValue(logger *slog.Logger, data []byte, path string, enableJSONOutput bool) (string, error) {
+func extractValue(logger *slog.Logger, data []byte, path string, enableJSONOutput bool, keepNumbers bool) (string, error) {
 	var jsonData interface{}
 	buf := new(bytes.Buffer)
 
@@ -201,12 +201,16 @@ func extractValue(logger *slog.Logger, data []byte, path string, enableJSONOutpu
 		j.EnableJSONOutput(true)
 	}
 	/* VG+ */
-	decoder := json.NewDecoder(strings.NewReader(string(data)))
-	decoder.UseNumber() // This keeps numbers as json.Number
+	var err error
+	if keepNumbers {
+		decoder := json.NewDecoder(strings.NewReader(string(data)))
+		decoder.UseNumber() // This keeps numbers as json.Number
 
-	if err := decoder.Decode(&jsonData); err != nil {
-		/* VG- */
-		//if err := json.Unmarshal(data, &jsonData); err != nil {
+		err = decoder.Decode(&jsonData)
+	} else {
+		err = json.Unmarshal(data, &jsonData)
+	}
+	if err != nil {
 		logger.Error("Failed to unmarshal data to json", "err", err, "data", data)
 		return "", err
 	}
@@ -233,7 +237,7 @@ func extractValue(logger *slog.Logger, data []byte, path string, enableJSONOutpu
 func extractLabels(logger *slog.Logger, data []byte, paths []string) []string {
 	labels := make([]string, len(paths))
 	for i, path := range paths {
-		if result, err := extractValue(logger, data, path, false); err == nil {
+		if result, err := extractValue(logger, data, path, false, false); err == nil {
 			labels[i] = result
 		} else {
 			logger.Error("Failed to extract label value", "err", err, "path", path, "data", data)
@@ -246,14 +250,14 @@ func timestampMetric(logger *slog.Logger, m JSONMetric, data []byte, pm promethe
 	if m.EpochTimestampJSONPath == "" {
 		return pm
 	}
-	ts, err := extractValue(logger, data, m.EpochTimestampJSONPath, false)
+	ts, err := extractValue(logger, data, m.EpochTimestampJSONPath, false, true)
 	if err != nil {
-		logger.Error("Failed to extract timestamp for metric", "path", m.KeyJSONPath, "err", err, "metric", m.Desc)
+		logger.Error("Failed to extract timestamp for metric", "path", m.EpochTimestampJSONPath, "err", err, "metric", m.Desc)
 		return pm
 	}
 	epochTime, err := SanitizeIntValue(ts)
 	if err != nil {
-		logger.Error("Failed to parse timestamp for metric", "path", m.KeyJSONPath, "err", err, "metric", m.Desc)
+		logger.Error("Failed to parse timestamp for metric", "path", m.EpochTimestampJSONPath, "err", err, "metric", m.Desc)
 		return pm
 	}
 	timestamp := time.UnixMilli(epochTime)
