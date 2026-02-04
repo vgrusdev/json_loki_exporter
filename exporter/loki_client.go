@@ -51,8 +51,8 @@ func NewLokiClient(m config.Module) (promtail.Client, error) {
 		Location: loc,
 	}
 
-	//c, err := promtail.NewClientProto(&cfg)
-	c, err := promtail.NewClientJson(&cfg)
+	c, err := promtail.NewClientProto(&cfg)
+	//c, err := promtail.NewClientJson(&cfg)
 	if err != nil {
 		return nil, err
 	}
