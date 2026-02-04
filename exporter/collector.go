@@ -237,7 +237,7 @@ func extractValue(logger *slog.Logger, data []byte, path string, enableJSONOutpu
 func extractLabels(logger *slog.Logger, data []byte, paths []string) []string {
 	labels := make([]string, len(paths))
 	for i, path := range paths {
-		if result, err := extractValue(logger, data, path, false, false); err == nil {
+		if result, err := extractValue(logger, data, path, false, true); err == nil {
 			labels[i] = result
 		} else {
 			logger.Error("Failed to extract label value", "err", err, "path", path, "data", data)

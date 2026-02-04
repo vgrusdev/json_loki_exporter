@@ -68,9 +68,19 @@ func SanitizeIntValue(s string) (int64, error) {
 	if value, err = strconv.ParseInt(s, 10, 64); err == nil {
 		return value, nil
 	}
-	resultErr = fmt.Sprintf("%s", err)
 
-	return value, errors.New(resultErr)
+	// Try parsing as float for scientific notation
+	floatVal, err := strconv.ParseFloat(s, 64)
+	if err != nil {
+		resultErr = fmt.Sprintf("%s", err)
+		return value, errors.New(resultErr)
+	}
+
+	// Check bounds
+	if floatVal > float64(math.MaxInt64) || floatVal < float64(math.MinInt64) {
+		return 0, fmt.Errorf("value %f out of int64 range", floatVal)
+	}
+	return int64(floatVal), nil
 }
 
 func CreateMetricsList(c config.Module) ([]JSONMetric, error) {
