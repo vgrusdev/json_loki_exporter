@@ -139,18 +139,13 @@ func (mc JSONMetricCollector) Collect(ch chan<- prometheus.Metric) {
 				continue
 			}
 
-			/*
-				var jsonData []interface{}
-				if err := json.Unmarshal([]byte(values), &jsonData); err != nil {
-					mc.Logger.Error("Failed to convert extracted objects to json", "err", err, "metric", m.Desc)
-					continue
-				}
-			*/
 			var jsonData []interface{}
+			/* VG+ */
 			decoder := json.NewDecoder(strings.NewReader(values))
 			decoder.UseNumber() // This keeps numbers as json.Number
 
 			if err := decoder.Decode(&jsonData); err != nil {
+				/* VG- */
 				//if err := json.Unmarshal([]byte(values), &jsonData); err != nil {
 				mc.Logger.Error("Failed to convert extracted objects to json", "err", err, "metric", m.Desc)
 				continue
@@ -205,8 +200,13 @@ func extractValue(logger *slog.Logger, data []byte, path string, enableJSONOutpu
 	if enableJSONOutput {
 		j.EnableJSONOutput(true)
 	}
+	/* VG+ */
+	decoder := json.NewDecoder(strings.NewReader(string(data)))
+	decoder.UseNumber() // This keeps numbers as json.Number
 
-	if err := json.Unmarshal(data, &jsonData); err != nil {
+	if err := decoder.Decode(&jsonData); err != nil {
+		/* VG- */
+		//if err := json.Unmarshal(data, &jsonData); err != nil {
 		logger.Error("Failed to unmarshal data to json", "err", err, "data", data)
 		return "", err
 	}

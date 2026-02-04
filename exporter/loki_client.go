@@ -80,13 +80,13 @@ func getTimestamp(logger *slog.Logger, m JSONMetric, data []byte) time.Time {
 	}
 	ts, err := extractValue(logger, data, m.EpochTimestampJSONPath, false)
 	if err != nil {
-		logger.Error("Failed to extract timestamp for metric", "path", m.KeyJSONPath, "err", err, "metric", m.Desc)
+		logger.Error("Failed to extract timestamp for metric", "path", m.EpochTimestampJSONPath, "err", err, "metric", m.Desc)
 		return time.Now()
 	}
 	logger.Debug("getTimestamp extracted ts", "ts", ts)
 	epochTime, err := SanitizeIntValue(ts)
 	if err != nil {
-		logger.Error("Failed to parse timestamp for metric", "path", m.KeyJSONPath, "err", err, "metric", m.Desc)
+		logger.Error("Failed to parse timestamp for metric", "path", m.EpochTimestampJSONPath, "err", err, "metric", m.Desc)
 		return time.Now()
 	}
 	timestamp := time.UnixMilli(epochTime)
