@@ -16,7 +16,9 @@ package exporter
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
+	"strings"
+
+	//"errors"
 	"log/slog"
 	"time"
 
@@ -137,8 +139,19 @@ func (mc JSONMetricCollector) Collect(ch chan<- prometheus.Metric) {
 				continue
 			}
 
+			/*
+				var jsonData []interface{}
+				if err := json.Unmarshal([]byte(values), &jsonData); err != nil {
+					mc.Logger.Error("Failed to convert extracted objects to json", "err", err, "metric", m.Desc)
+					continue
+				}
+			*/
 			var jsonData []interface{}
-			if err := json.Unmarshal([]byte(values), &jsonData); err != nil {
+			decoder := json.NewDecoder(strings.NewReader(values))
+			decoder.UseNumber() // This keeps numbers as json.Number
+
+			if err := decoder.Decode(&jsonData); err != nil {
+				//if err := json.Unmarshal([]byte(values), &jsonData); err != nil {
 				mc.Logger.Error("Failed to convert extracted objects to json", "err", err, "metric", m.Desc)
 				continue
 			}
@@ -245,53 +258,4 @@ func timestampMetric(logger *slog.Logger, m JSONMetric, data []byte, pm promethe
 	}
 	timestamp := time.UnixMilli(epochTime)
 	return prometheus.NewMetricWithTimestamp(timestamp, pm)
-}
-
-func getTimestamp(logger *slog.Logger, m JSONMetric, data []byte) time.Time {
-	if m.EpochTimestampJSONPath == "" {
-		return time.Now()
-	}
-	ts, err := extractValue(logger, data, m.EpochTimestampJSONPath, false)
-	if err != nil {
-		logger.Error("Failed to extract timestamp for metric", "path", m.KeyJSONPath, "err", err, "metric", m.Desc)
-		return time.Now()
-	}
-	epochTime, err := SanitizeIntValue(ts)
-	if err != nil {
-		logger.Error("Failed to parse timestamp for metric", "path", m.KeyJSONPath, "err", err, "metric", m.Desc)
-		return time.Now()
-	}
-	timestamp := time.UnixMilli(epochTime)
-	return timestamp
-}
-
-func labelSetFromArrays(keys []string, values []string) (map[string]string, error) {
-	m := make(map[string]string)
-	if len(keys) != len(values) {
-		return m, errors.New("labelSetFromArrays: Arrays should be the same length")
-	}
-	for i, key := range keys {
-		m[key] = values[i]
-	}
-	return m, nil
-}
-
-func ratingToSeverity(r string) string {
-	switch r {
-	case "0":
-		return "trace"
-	case "1":
-		return "info"
-	case "2":
-		return "warning"
-	case "3":
-		return "error"
-	case "4":
-		return "fatal"
-	case "5":
-		return "panic"
-	default:
-		return "unknown"
-	}
-
 }
