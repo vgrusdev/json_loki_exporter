@@ -154,6 +154,7 @@ func probeHandler(w http.ResponseWriter, r *http.Request, logger *slog.Logger, c
 	}
 	if jsonMetricCollector.LokiClient != nil {
 		defer jsonMetricCollector.LokiClient.Shutdown()
+		jsonMetricCollector.LokiMaxAge = config.Modules[module].LokiClientConfig.AlertSamplesMaxAge
 	}
 
 	registry := prometheus.NewPedanticRegistry()

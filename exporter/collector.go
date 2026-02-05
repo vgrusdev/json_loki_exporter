@@ -33,6 +33,7 @@ type JSONMetricCollector struct {
 	Data        []byte // result of request to target by FetchJSON(endpoint string)
 	Logger      *slog.Logger
 	LokiClient  promtail.Client
+	LokiMaxAge  time.Duration
 }
 
 type JSONMetric struct {
@@ -173,6 +174,12 @@ func (mc JSONMetricCollector) Collect(ch chan<- prometheus.Metric) {
 				}
 				message := value
 				timestamp := getTimestamp(mc.Logger, m, jdata)
+
+				if (mc.LokiMaxAge > 0*time.Second) && (time.Since(timestamp) > mc.LokiMaxAge) {
+					mc.Logger.Debug("Alert entry too far behind", "timestamp", timestamp)
+					continue
+				}
+
 				if rating, ok := labelSet["alert_rating"]; ok {
 					labelSet["level"] = ratingToSeverity(rating)
 				}
