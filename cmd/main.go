@@ -23,6 +23,7 @@ import (
 
 	"github.com/alecthomas/kingpin/v2"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/collectors"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/prometheus/common/promslog"
 	"github.com/prometheus/common/promslog/flag"
@@ -68,6 +69,11 @@ func Run() {
 
 	if *configCheck {
 		os.Exit(0)
+	}
+
+	// if we're not in debug log level, we unregister the Go runtime metrics collector that gets registered by default
+	if promslogConfig.Level.Level() != slog.LevelDebug {
+		prometheus.Unregister(collectors.NewGoCollector())
 	}
 
 	http.Handle(*metricsPath, promhttp.Handler())
