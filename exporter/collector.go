@@ -158,7 +158,9 @@ func (mc JSONMetricCollector) Collect(ch chan<- prometheus.Metric) {
 			}
 			mc.Logger.Debug("mc.JSONMetrics loop, LokiScrape", "jsonData", jsonData)
 
+			loki_total--
 			for _, data := range jsonData {
+				loki_total++
 				mc.Logger.Debug("mc.JSONMetrics loop, LokiScrape, jsonData", "data", data)
 				jdata, err := json.Marshal(data)
 				if err != nil {
