@@ -279,5 +279,6 @@ func timestampMetric(logger *slog.Logger, m JSONMetric, data []byte, pm promethe
 		return pm
 	}
 	timestamp := time.UnixMilli(epochTime)
+	logger.Debug("timestampMetric:", "ts", ts, "eposhTime", epochTime, "timestamp", timestamp)
 	return prometheus.NewMetricWithTimestamp(timestamp, pm)
 }
