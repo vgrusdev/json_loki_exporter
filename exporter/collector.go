@@ -59,6 +59,9 @@ func (mc JSONMetricCollector) Describe(ch chan<- *prometheus.Desc) {
 }
 
 func (mc JSONMetricCollector) Collect(ch chan<- prometheus.Metric) {
+	loki_total := 0
+	loki_success := 0
+
 	for _, m := range mc.JSONMetrics {
 		mc.Logger.Debug("mc.JSONMetrics loop", "m", m)
 		switch m.Type {
@@ -133,6 +136,8 @@ func (mc JSONMetricCollector) Collect(ch chan<- prometheus.Metric) {
 			if mc.LokiClient == nil {
 				continue
 			}
+			loki_total++
+
 			values, err := extractValue(mc.Logger, mc.Data, m.KeyJSONPath, true, false)
 			mc.Logger.Debug("mc.JSONMetrics loop, LokiScrape", "values", values)
 			if err != nil {
@@ -190,11 +195,15 @@ func (mc JSONMetricCollector) Collect(ch chan<- prometheus.Metric) {
 					Line:   message,
 				}
 				mc.LokiClient.Single() <- &sInputEntry
+				loki_success++
 			}
 		default:
 			mc.Logger.Error("Unknown scrape config type", "type", m.Type, "metric", m.Desc)
 			continue
 		}
+	}
+	if loki_total > 0 {
+		mc.Logger.Debug("Alert records:", "total_processed", loki_total, "send_to_LOKI", loki_success)
 	}
 }
 
