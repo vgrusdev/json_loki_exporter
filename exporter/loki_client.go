@@ -116,7 +116,7 @@ func ratingToSeverity(r string) string {
 	case "3":
 		return "error"
 	case "4":
-		return "fatal"
+		return "critical"
 	case "5":
 		return "panic"
 	default:
